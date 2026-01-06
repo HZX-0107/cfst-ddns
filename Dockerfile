@@ -1,7 +1,7 @@
 # 第一阶段：构建阶段
 # [修改点] 放弃 Alpine，改用标准 Debian 版 Go 镜像
 # 这能解决 99% 的 "go mod download" 网络/证书/依赖缺失问题
-FROM golang:1.23 AS builder
+FROM golang:1.25-alpine AS builder
 
 # 设置工作目录
 WORKDIR /app
