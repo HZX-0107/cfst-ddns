@@ -1,0 +1,30 @@
+app:
+  debug: true
+  # 如果将来做定时任务，可以配置 cron 表达式 (例如: 每小时运行一次)
+  cron: "0 */1 * * *"
+
+tencent:
+  # 在这里填入你的腾讯云 API 密钥
+  secret_id: "YOUR_TENCENT_SECRET_ID"
+  secret_key: "YOUR_TENCENT_SECRET_KEY"
+
+domain:
+  # 你要操作的主域名
+  main_domain: "youdomain.com"
+  # 你要操作的子域名前缀
+  sub_domain: "*"
+
+speedtest:
+  # cfst 二进制文件的路径（相对于运行目录）
+  bin_path: "./assets/cfst"
+
+  # IP 地址库文件路径
+  ip_file: "./assets/ip.txt"
+  ipv6_file: "./assets/ipv6.txt"
+
+  # 测速结果输出路径
+  output_csv: "./assets/result.csv"
+
+  # 测速参数: 最大延迟 (毫秒) 和 测速数量
+  max_ping: 9999
+  test_count: 500

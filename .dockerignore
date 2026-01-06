@@ -1,0 +1,9 @@
+.git
+.gitignore
+cfst-ddns
+cfst-ddns.exe
+.log
+assets/.csv
+assets/result*.csv
+.idea
+.vscode
