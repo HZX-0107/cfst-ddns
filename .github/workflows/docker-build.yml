@@ -68,7 +68,7 @@ jobs:
             ${{ env.DOCKERHUB_USERNAME }}/cfst-ddns:latest
             ${{ env.DOCKERHUB_USERNAME }}/cfst-ddns:main
           build-args: |
-            CFST_VERSION=v2.2.5
+            CFST_VERSION=v2.3.4
 
       # ----------------------------------------------------------------
       # 构建并推送 -> 阿里云 (Dev 分支)
