@@ -24,11 +24,13 @@ RUN go mod download
 # 复制源代码 (包含 assets/embed.go 等)
 COPY . .
 
-# 设置要下载的版本
+# [关键修复] 升级版本到 v2.2.5 以上（例如 v2.3.4）
+# 只有 v2.2.6+ 的版本，文件名才是 cfst_linux_amd64.tar.gz
+# 旧版本 v2.2.5 的文件名是 CloudflareSpeedTest_linux_amd64.tar.gz
 ARG CFST_VERSION=v2.3.4
 
 # 下载并准备资源
-# Alpine 自带 apk 安装的 curl，不需要 apt-get
+# 现在的版本 v2.3.4 匹配下面的文件名 cfst_...，curl 能够正常下载
 RUN curl -L "https://github.com/XIU2/CloudflareSpeedTest/releases/download/${CFST_VERSION}/cfst_linux_amd64.tar.gz" -o cfst.tar.gz && \
     tar -zxvf cfst.tar.gz && \
     mkdir -p assets && \
