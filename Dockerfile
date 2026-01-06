@@ -4,20 +4,20 @@ FROM golang:1.23-alpine AS builder
 # 设置工作目录
 WORKDIR /app
 
-# [修改点 1] 这一步必须提到最前面！
-# 在下载 Go 依赖之前，必须先安装 git、curl 和 tar
-# git: go mod download 某些时候需要它
-# curl/tar: 后面下载 cfst 需要它
-RUN apk add --no-cache curl tar git
+# [关键修复] 安装基础工具
+# git: go mod download 依赖它
+# ca-certificates: 解决 HTTPS 证书问题
+# curl/tar: 用于后续下载 cfst
+RUN apk add --no-cache curl tar git ca-certificates
 
-# [修改点 2] 设置 Go 代理，防止网络超时 (可选，但在 GitHub Actions 里加上更稳)
+# [修正] 设置 Go 代理
+# GitHub Actions 位于海外，使用 Google 官方源速度最快
 ENV GOPROXY=https://proxy.golang.org,direct
 
 # 复制依赖文件
 COPY go.mod go.sum ./
 
 # 下载依赖
-# 现在有了 git 和 proxy，这一步应该能通过了
 RUN go mod download
 
 # 复制源代码 (包含 assets/embed.go 等)
