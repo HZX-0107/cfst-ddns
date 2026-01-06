@@ -85,4 +85,4 @@ jobs:
             ${{ env.ALIYUN_REGISTRY }}/${{ env.ALIYUN_NAMESPACE }}/cfst-ddns:dev
             ${{ env.ALIYUN_REGISTRY }}/${{ env.ALIYUN_NAMESPACE }}/cfst-ddns:sha-${{ github.sha }}
           build-args: |
-            CFST_VERSION=v2.2.5
+            CFST_VERSION=v2.3.4
