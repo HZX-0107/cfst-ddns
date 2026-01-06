@@ -1,0 +1,88 @@
+name: Docker Build and Push
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+  # 允许手动触发
+  workflow_dispatch:
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    # [新增] 将 Secrets 映射到环境变量
+    # 这样在下面的步骤中就可以直接使用 env.XXX，看起来更清晰
+    env:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      ALIYUN_REGISTRY: ${{ secrets.ALIYUN_REGISTRY }}
+      ALIYUN_NAMESPACE: ${{ secrets.ALIYUN_NAMESPACE }}
+
+    steps:
+      # 1. 检出代码
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. 设置 QEMU
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      # 3. 设置 Docker Buildx
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ----------------------------------------------------------------
+      # 场景 A: 如果是 main 分支 -> 登录 Docker Hub
+      # ----------------------------------------------------------------
+      - name: Login to Docker Hub
+        if: github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }} # 使用环境变量
+          password: ${{ secrets.DOCKERHUB_TOKEN }} # 密码建议保留在 Secrets 中，不建议放入普通 env (虽然 env 也支持)
+
+      # ----------------------------------------------------------------
+      # 场景 B: 如果是 dev 分支 -> 登录 阿里云容器镜像服务 (ACR)
+      # ----------------------------------------------------------------
+      - name: Login to Alibaba Cloud Container Registry
+        if: github.ref == 'refs/heads/dev'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.ALIYUN_REGISTRY }}    # 使用环境变量
+          username: ${{ secrets.ALIYUN_USERNAME }}
+          password: ${{ secrets.ALIYUN_PASSWORD }}
+
+      # ----------------------------------------------------------------
+      # 构建并推送 -> Docker Hub (Main 分支)
+      # ----------------------------------------------------------------
+      - name: Build and push to Docker Hub
+        if: github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          # 引用环境变量拼接标签
+          tags: |
+            ${{ env.DOCKERHUB_USERNAME }}/cfst-ddns:latest
+            ${{ env.DOCKERHUB_USERNAME }}/cfst-ddns:main
+          build-args: |
+            CFST_VERSION=v2.2.5
+
+      # ----------------------------------------------------------------
+      # 构建并推送 -> 阿里云 (Dev 分支)
+      # ----------------------------------------------------------------
+      - name: Build and push to Aliyun ACR
+        if: github.ref == 'refs/heads/dev'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          # 引用环境变量拼接标签
+          tags: |
+            ${{ env.ALIYUN_REGISTRY }}/${{ env.ALIYUN_NAMESPACE }}/cfst-ddns:dev
+            ${{ env.ALIYUN_REGISTRY }}/${{ env.ALIYUN_NAMESPACE }}/cfst-ddns:sha-${{ github.sha }}
+          build-args: |
+            CFST_VERSION=v2.2.5
