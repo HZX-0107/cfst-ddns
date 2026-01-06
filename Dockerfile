@@ -1,14 +1,13 @@
 # 第一阶段：构建阶段
-FROM golang:1.23-alpine AS builder
+# [修改点] 放弃 Alpine，改用标准 Debian 版 Go 镜像
+# 这能解决 99% 的 "go mod download" 网络/证书/依赖缺失问题
+FROM golang:1.23 AS builder
 
 # 设置工作目录
 WORKDIR /app
 
-# [关键修复] 安装基础工具
-# git: go mod download 依赖它
-# ca-certificates: 解决 HTTPS 证书问题
-# curl/tar: 用于后续下载 cfst
-RUN apk add --no-cache curl tar git ca-certificates
+# [无需安装基础工具]
+# 标准版镜像自带 git, curl, tar, ca-certificates，无需手动安装
 
 # [修正] 设置 Go 代理
 # GitHub Actions 位于海外，使用 Google 官方源速度最快
@@ -18,6 +17,7 @@ ENV GOPROXY=https://proxy.golang.org,direct
 COPY go.mod go.sum ./
 
 # 下载依赖
+# 在 Debian 环境下，这一步通常极其稳定
 RUN go mod download
 
 # 复制源代码 (包含 assets/embed.go 等)
@@ -36,9 +36,10 @@ RUN curl -L "https://github.com/XIU2/CloudflareSpeedTest/releases/download/${CFS
     rm cfst.tar.gz
 
 # 编译 Go 程序
+# 注意：CGO_ENABLED=0 是必须的，因为我们在 Debian 编译，要在 Alpine 运行，必须静态链接
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o cfst-ddns cmd/app/main.go
 
-# 第二阶段：运行阶段 (保持不变)
+# 第二阶段：运行阶段 (保持不变，依然使用轻量级 Alpine)
 FROM alpine:latest
 WORKDIR /app
 RUN apk --no-cache add ca-certificates tzdata
