@@ -28,10 +28,6 @@ func main() {
 	if err := initAssetFile(defaultConfigPath, assets.DefaultConfig); err != nil {
 		// 如果无法写入默认配置，仅打印警告，尝试继续运行（也许文件已存在但权限不足）
 		log.Printf("Warning: Failed to init default config file: %v", err)
-	} else {
-		// 如果成功写入了文件，提示用户
-		// 这里有个小技巧：如果是首次生成，可能需要提醒用户去修改配置
-		// 但为了自动化，我们继续往下运行
 	}
 
 	// 2. 加载配置
@@ -186,7 +182,15 @@ func processIP(cfg *config.Config, runner *speedtest.Runner, client *dns.Tencent
 }
 
 func setupLogger() {
-	logFile, err := os.OpenFile("app.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	// [修改] 将日志文件放入 logs 目录，方便 Docker 挂载
+	logDir := "logs"
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		fmt.Println("Failed to create log directory:", err)
+		return
+	}
+
+	logPath := filepath.Join(logDir, "app.log")
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
 		fmt.Println("Failed to open log file:", err)
 		return

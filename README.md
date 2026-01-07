@@ -98,6 +98,7 @@ services:
     volumes:
       - ./configs:/app/configs
       - ./assets:/app/assets
+      - ./logs:/app/logs
     # 如果程序只是运行一次就退出(Job类型)，不需要 restart: always
     # 如果未来增加了 Cron 功能长期运行，可以开启 restart
     restart: no 
