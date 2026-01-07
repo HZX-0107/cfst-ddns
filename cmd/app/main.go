@@ -73,8 +73,7 @@ func main() {
 	}
 
 	// 3.2 初始化测速运行器
-	stRunner := speedtest.NewRunner(&cfg.SpeedTest)
-
+	stRunner := speedtest.NewRunner(&cfg.SpeedTest, cfg.App.Debug)
 	// 4. 执行业务逻辑
 	log.Println("------------------------------------------------")
 
