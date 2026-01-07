@@ -77,7 +77,8 @@ speedtest:
   
   # 测速参数
   max_ping: 9999    # 最大延迟 (毫秒)
-  test_count: 500   # 测速数量
+  test_count: 500   # 并发测速数量
+  download_test_count: 50 # 测速数量
   
   # [新增] 自定义下载测速地址
   # 默认地址 speed.cloudflare.com 在某些地区可能无法访问

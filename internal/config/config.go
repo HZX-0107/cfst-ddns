@@ -42,7 +42,11 @@ type SpeedTestConfig struct {
 	OutputCSV6  string `mapstructure:"output_csv_v6"`
 	MaxPing     int    `mapstructure:"max_ping"`
 	TestCount   int    `mapstructure:"test_count"`
-	DownloadURL string `mapstructure:"download_url"` // [新增] 自定义测速地址
+	DownloadURL string `mapstructure:"download_url"`
+
+	// [新增] 参与下载测速的数量
+	// 默认 cfst 是 10，建议设为 20-50 以提高命中率
+	DownloadTestCount int `mapstructure:"download_test_count"`
 }
 
 // Load 读取并解析配置文件
