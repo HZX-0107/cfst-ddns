@@ -17,7 +17,7 @@
 
 在开始之前，请确保你拥有：
 
-1. **腾讯云 API 密钥** (SecretId, SecretKey)：用于操作 DNSPod。
+1. **腾讯云 API 密钥** (SecretId, SecretKey)：用于操作 DNSPod。如果使用docker镜像，那么不需要准备以下两项
 2. **CloudflareSpeedTest 二进制文件**：
    - **开发模式**：需下载对应的 `cfst` 文件并解压放入 `assets/` 目录。
    - **运行模式**：如果使用预编译好的单文件版本，则无需准备此项。
@@ -51,7 +51,7 @@ go build -o cfst-ddns cmd/app/main.go
 
 ```
 app:
-  debug: true
+  debug: false          # 开启后，会打印详细的debug信息，调试时可以使用
   # cron: "0 */1 * * *" # 定时任务表达式 (预留功能)
 
 tencent:
@@ -61,7 +61,8 @@ tencent:
 domain:
   main_domain: "example.com" # 主域名
   sub_domain: "cf"           # 子域名 (例如 cf.example.com)
-
+  
+# 如果使用docker镜像，那么不需要配置下面路径
 speedtest:
   # 测速工具路径 (如果使用 embed 模式，此路径会被程序自动覆盖为临时路径)
   bin_path: "./assets/cfst"
@@ -81,16 +82,47 @@ speedtest:
 
 ## 🐳 Docker 部署
 
-本项目提供了优化的 Dockerfile，支持在构建时自动拉取最新版的 CloudflareSpeedTest。无需像本地构建那样拉取镜像
+本项目支持多种 Docker 部署方式。推荐使用 GitHub 镜像站 (GHCR) 直接拉取。
 
-### 构建镜像
+### 方式一：Docker Compose (推荐)
 
+```yml
+services:
+  cfst-ddns:
+    image: ghcr.io/hzx-0107/cfst-ddns:latest
+    container_name: cfst-ddns
+    volumes:
+      - ./configs:/app/configs
+      - ./assets:/app/assets
+    # 如果程序只是运行一次就退出(Job类型)，不需要 restart: always
+    # 如果未来增加了 Cron 功能长期运行，可以开启 restart
+    restart: no 
 ```
+
+启动服务：
+
+```shell
+docker-compose up -d
+```
+
+### 方式二：Docker CLI
+
+```shell
+docker run -d \
+  --name cfst-ddns \
+  -v $(pwd)/configs:/app/configs \
+  -v $(pwd)/assets:/app/assets \
+  ghcr.io/hzx-0107/cfst-ddns:latest
+```
+
+### 方式三：手动构建镜像
+
+```shell
 # 默认构建
 docker build -t cfst-ddns .
 
 # 指定 CloudflareSpeedTest 版本构建
-docker build --build-arg CFST_VERSION=v2.2.5 -t cfst-ddns .
+docker build --build-arg CFST_VERSION=v2.3.4 -t cfst-ddns .
 ```
 
 ### 运行容器
@@ -105,7 +137,7 @@ docker run -d \
   cfst-ddns
 ```
 
-**注意**：容器运行完毕后会自动退出（因为是单次任务）。如果你需要定时运行，可以使用系统的 crontab 定时启动容器，或者使用 Kubernetes 的 CronJob。
+**注意**：容器运行完毕后会自动退出（因为是单次任务，定时功能暂未开发好）。如果你需要定时运行，可以使用系统的 crontab 定时启动容器，或者使用 Kubernetes 的 CronJob。
 
 ## 📂 项目结构
 
