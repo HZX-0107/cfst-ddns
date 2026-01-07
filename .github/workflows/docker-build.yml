@@ -1,0 +1,111 @@
+name: Docker Build and Push
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+    # [新增] 监听 v 开头的标签，例如 v1.0.0
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+
+    env:
+      ALIYUN_REGISTRY: ${{ secrets.ALIYUN_REGISTRY }}
+      ALIYUN_NAMESPACE: ${{ secrets.ALIYUN_NAMESPACE }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ----------------------------------------------------------------
+      # [新增] 自动生成 GHCR 的 Docker 标签和元数据
+      # ----------------------------------------------------------------
+      - name: Extract metadata for GHCR
+        id: meta-ghcr
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/cfst-ddns
+          tags: |
+            # 如果是 tag (v1.0.0)，生成 :v1.0.0
+            type=ref,event=tag
+            # 如果是 main 分支，生成 :main
+            type=ref,event=branch
+            # 如果是 tag 或者是 main 分支，额外生成 :latest
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') }}
+
+      # ----------------------------------------------------------------
+      # [新增] 自动生成 阿里云 的 Docker 标签和元数据
+      # ----------------------------------------------------------------
+      - name: Extract metadata for Aliyun
+        id: meta-aliyun
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.ALIYUN_REGISTRY }}/${{ env.ALIYUN_NAMESPACE }}/cfst-ddns
+          tags: |
+            type=ref,event=branch
+            type=sha
+
+      # ----------------------------------------------------------------
+      # 场景 A: Main 分支 OR Tag -> 登录 GHCR
+      # ----------------------------------------------------------------
+      - name: Login to GitHub Container Registry
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # ----------------------------------------------------------------
+      # 场景 B: Dev 分支 -> 登录 阿里云
+      # ----------------------------------------------------------------
+      - name: Login to Alibaba Cloud Container Registry
+        if: github.ref == 'refs/heads/dev'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.ALIYUN_REGISTRY }}
+          username: ${{ secrets.ALIYUN_USERNAME }}
+          password: ${{ secrets.ALIYUN_PASSWORD }}
+
+      # ----------------------------------------------------------------
+      # 构建并推送 -> GHCR (Main 分支 或 Tag)
+      # ----------------------------------------------------------------
+      - name: Build and push to GHCR
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          # 使用 meta-ghcr 步骤自动生成的标签 (latest, v1.0.0 等)
+          tags: ${{ steps.meta-ghcr.outputs.tags }}
+          labels: ${{ steps.meta-ghcr.outputs.labels }}
+
+      # ----------------------------------------------------------------
+      # 构建并推送 -> 阿里云 (Dev 分支)
+      # ----------------------------------------------------------------
+      - name: Build and push to Aliyun ACR
+        if: github.ref == 'refs/heads/dev'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          # 使用 meta-aliyun 步骤自动生成的标签 (dev, sha-xxx)
+          tags: ${{ steps.meta-aliyun.outputs.tags }}
+          labels: ${{ steps.meta-aliyun.outputs.labels }}

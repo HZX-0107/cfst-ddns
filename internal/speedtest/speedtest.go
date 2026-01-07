@@ -7,25 +7,27 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 
 	"cfst-ddns/internal/config"
 )
 
 // Runner 负责执行测速任务
 type Runner struct {
-	Cfg *config.SpeedTestConfig
+	Cfg   *config.SpeedTestConfig
+	Debug bool
 }
 
 // NewRunner 创建一个测速运行器
-func NewRunner(cfg *config.SpeedTestConfig) *Runner {
-	return &Runner{Cfg: cfg}
+func NewRunner(cfg *config.SpeedTestConfig, debug bool) *Runner {
+	return &Runner{
+		Cfg:   cfg,
+		Debug: debug,
+	}
 }
 
 // Run 执行测速并返回最佳 IP
-// isIPv6: true 表示测速 IPv6, false 表示 IPv4
-// 返回值: (最佳IP, 错误)
 func (r *Runner) Run(isIPv6 bool) (string, error) {
-	// 1. 根据 IPv4/IPv6 选择对应的输入和输出文件
 	ipFile := r.Cfg.IPFile
 	outputFile := r.Cfg.OutputCSV4
 
@@ -34,23 +36,19 @@ func (r *Runner) Run(isIPv6 bool) (string, error) {
 		outputFile = r.Cfg.OutputCSV6
 	}
 
-	// 2. 检查 IP 库文件是否存在
+	// 检查 IP 库文件是否存在
 	if _, err := os.Stat(ipFile); os.IsNotExist(err) {
 		if isIPv6 {
-			// IPv6 文件不存在通常是可以接受的（用户可能不需要 IPv6）
 			log.Printf("IPv6 list file not found (%s), skipping IPv6 test.", ipFile)
 			return "", nil
 		}
 		return "", fmt.Errorf("IP file not found: %s", ipFile)
 	}
 
-	// [新增] 3. 检查并清理旧的结果文件
-	// 虽然 cfst 工具通常会覆盖文件，但手动清理能确保万无一失
+	// 检查并清理旧的结果文件
 	if _, err := os.Stat(outputFile); err == nil {
 		if err := os.Remove(outputFile); err != nil {
 			log.Printf("Warning: Failed to delete old result file %s: %v", outputFile, err)
-		} else {
-			log.Printf("Cleaned up old result file: %s", outputFile)
 		}
 	}
 
@@ -61,26 +59,45 @@ func (r *Runner) Run(isIPv6 bool) (string, error) {
 		return "IPv4"
 	}())
 
-	// 3. 构造命令
-	// 对应命令: ./cfst -f ip.txt -n 500 -o result.csv -tl 9999
-	// 注意：这里假设 bin_path 是可执行文件路径
-	cmd := exec.Command(r.Cfg.BinPath,
+	// [新增] 处理下载测速数量的默认值
+	dnCount := r.Cfg.DownloadTestCount
+	if dnCount <= 0 {
+		dnCount = 10 // 默认值保持 10
+	}
+
+	// 构造命令
+	args := []string{
 		"-f", ipFile,
 		"-n", strconv.Itoa(r.Cfg.TestCount),
 		"-o", outputFile,
 		"-tl", strconv.Itoa(r.Cfg.MaxPing),
-	)
+		"-dn", strconv.Itoa(dnCount), // [修改] 使用配置的数量
+	}
 
-	// 4. 执行命令
-	// 如果你想在控制台看到 cfst 原本的彩色输出，可以将 Stdout 对接
-	// cmd.Stdout = os.Stdout
-	// 这里为了保持日志整洁，我们只捕获错误，或者根据 Debug 开关决定
+	if r.Cfg.DownloadURL != "" {
+		args = append(args, "-url", r.Cfg.DownloadURL)
+	}
 
-	if err := cmd.Run(); err != nil {
+	if r.Debug {
+		args = append(args, "-debug")
+	}
+
+	cmd := exec.Command(r.Cfg.BinPath, args...)
+
+	output, err := cmd.CombinedOutput()
+
+	if (r.Debug || err != nil) && len(output) > 0 {
+		label := "IPv4"
+		if isIPv6 {
+			label = "IPv6"
+		}
+		log.Printf("--- CFST Output (%s) ---\n%s\n--- End Output ---", label, string(output))
+	}
+
+	if err != nil {
 		return "", fmt.Errorf("failed to execute speedtest binary: %w", err)
 	}
 
-	// 5. 解析结果
 	bestIP, err := r.parseBestIP(outputFile)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse result csv: %w", err)
@@ -89,35 +106,55 @@ func (r *Runner) Run(isIPv6 bool) (string, error) {
 	return bestIP, nil
 }
 
-// parseBestIP 读取 CSV 文件并返回第一行的 IP
+// parseBestIP 读取 CSV 文件并返回最佳 IP
 func (r *Runner) parseBestIP(filePath string) (string, error) {
 	f, err := os.Open(filePath)
 	if err != nil {
 		return "", err
 	}
-	// 仅在严格需要记录错误日志时才这样写，通常没必要
-	defer func() {
-		if err := f.Close(); err != nil {
-			log.Printf("Error closing file: %v", err)
-		}
-	}()
+	defer f.Close()
 
 	reader := csv.NewReader(f)
-	// 读取所有记录
+	reader.FieldsPerRecord = -1
+
 	records, err := reader.ReadAll()
 	if err != nil {
 		return "", err
 	}
 
-	// CloudflareSpeedTest 的 CSV 格式：
-	// 第一行是表头 (IP地址, 速度, 延迟...)
-	// 第二行开始是数据
 	if len(records) < 2 {
 		return "", fmt.Errorf("no results found in csv file")
 	}
 
-	// 获取第二行第一列 (最佳 IP)
+	// 遍历寻找第一个有效的 IP (下载速度 > 0)
+	for i, row := range records {
+		if i == 0 {
+			continue
+		}
+		if len(row) < 6 {
+			continue
+		}
+
+		ip := row[0]
+		speedStr := strings.TrimSpace(row[5])
+
+		speed, _ := strconv.ParseFloat(speedStr, 64)
+
+		if speed > 0 {
+			if i > 1 {
+				latency := strings.TrimSpace(row[4])
+				log.Printf("Smart Select: Skipped %d IP(s) with 0.00 speed. Selected: %s (Speed: %s MB/s, Latency: %s ms)",
+					i-1, ip, speedStr, latency)
+			}
+			return ip, nil
+		}
+	}
+
 	bestIP := records[1][0]
+	log.Printf("[Warning] All tested IPs have 0.00 MB/s download speed. Fallback to the first one: %s", bestIP)
+	log.Printf("[Tip] This usually means the default test URL is blocked or timed out.")
+	log.Printf("[Tip] Please try setting 'download_url' in config.yaml to a different CDN URL.")
+
 	if bestIP == "" {
 		return "", fmt.Errorf("parsed IP is empty")
 	}

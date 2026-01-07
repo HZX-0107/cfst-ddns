@@ -17,7 +17,7 @@
 
 在开始之前，请确保你拥有：
 
-1. **腾讯云 API 密钥** (SecretId, SecretKey)：用于操作 DNSPod。
+1. **腾讯云 API 密钥** (SecretId, SecretKey)：用于操作 DNSPod。如果使用docker镜像，那么不需要准备以下两项
 2. **CloudflareSpeedTest 二进制文件**：
    - **开发模式**：需下载对应的 `cfst` 文件并解压放入 `assets/` 目录。
    - **运行模式**：如果使用预编译好的单文件版本，则无需准备此项。
@@ -51,7 +51,7 @@ go build -o cfst-ddns cmd/app/main.go
 
 ```
 app:
-  debug: true
+  debug: false          # 开启后，会打印详细的debug信息，调试时可以使用
   # cron: "0 */1 * * *" # 定时任务表达式 (预留功能)
 
 tencent:
@@ -61,7 +61,8 @@ tencent:
 domain:
   main_domain: "example.com" # 主域名
   sub_domain: "cf"           # 子域名 (例如 cf.example.com)
-
+  
+# 如果使用docker镜像，那么不需要配置下面路径
 speedtest:
   # 测速工具路径 (如果使用 embed 模式，此路径会被程序自动覆盖为临时路径)
   bin_path: "./assets/cfst"
@@ -76,28 +77,72 @@ speedtest:
   
   # 测速参数
   max_ping: 9999    # 最大延迟 (毫秒)
-  test_count: 500   # 测速数量
+  test_count: 500   # 并发测速数量
+  download_test_count: 50 # 测速数量
+  
+  # [新增] 自定义下载测速地址
+  # 默认地址 speed.cloudflare.com 在某些地区可能无法访问
+  # 备选地址 1: https://img.131213.xyz/Test/100m.jpg
+  # 备选地址 2: https://cdn.cloudflare.steamstatic.com/steam/apps/5952/movie_max.webm
+  # 备选地址 3: https://speed.cloudflare.com/__down?bytes=20000000 (默认)
+  download_url: "https://cdn.cloudflare.steamstatic.com/steam/apps/5952/movie_max.webm"
 ```
 
 ## 🐳 Docker 部署
 
-本项目提供了优化的 Dockerfile，支持在构建时自动拉取最新版的 CloudflareSpeedTest。无需像本地构建那样拉取镜像
+本项目支持多种 Docker 部署方式。推荐使用 GitHub 镜像站 (GHCR) 直接拉取。
 
-### 构建镜像
+注意使用docker部署方式，首次启动会自动生成一个config.yml文件保证启动成功，请修改此文件为自己的配置后重新启动
+### 方式一：Docker Compose (推荐)
 
+```yml
+services:
+  cfst-ddns:
+    image: ghcr.io/hzx-0107/cfst-ddns:latest
+    container_name: cfst-ddns
+    # 设置时区
+    environment:
+      TZ: Asia/Shanghai
+    volumes:
+      - ./configs:/app/configs
+      - ./assets:/app/assets
+      - ./logs:/app/logs
+    # 如果程序只是运行一次就退出(Job类型)，不需要 restart: always
+    # 如果未来增加了 Cron 功能长期运行，可以开启 restart
+    restart: no 
 ```
+
+启动服务：
+
+```shell
+docker-compose up -d
+```
+
+### 方式二：Docker CLI
+
+```shell
+docker run -d \
+  --name cfst-ddns \
+  -v $(pwd)/configs:/app/configs \
+  -v $(pwd)/assets:/app/assets \
+  ghcr.io/hzx-0107/cfst-ddns:latest
+```
+
+### 方式三：手动构建镜像
+
+```shell
 # 默认构建
 docker build -t cfst-ddns .
 
 # 指定 CloudflareSpeedTest 版本构建
-docker build --build-arg CFST_VERSION=v2.2.5 -t cfst-ddns .
+docker build --build-arg CFST_VERSION=v2.3.4 -t cfst-ddns .
 ```
 
 ### 运行容器
 
 建议挂载配置目录和资源目录，以便持久化数据和修改配置。
 
-```
+```shell
 docker run -d \
   --name cfst-ddns \
   -v $(pwd)/configs:/app/configs \
@@ -105,22 +150,23 @@ docker run -d \
   cfst-ddns
 ```
 
-**注意**：容器运行完毕后会自动退出（因为是单次任务）。如果你需要定时运行，可以使用系统的 crontab 定时启动容器，或者使用 Kubernetes 的 CronJob。
+**注意**：容器运行完毕后会自动退出（因为是单次任务，定时功能暂未开发好）。如果你需要定时运行，可以使用系统的 crontab 定时启动容器，或者使用 Kubernetes 的 CronJob。
 
 ## 📂 项目结构
 
 ```
 cfst-ddns/
-├── assets/             # 静态资源 (Embed 目标目录)
-│   ├── cfst            # [必需] CloudflareSpeedTest 二进制
-│   ├── ip.txt          # [必需] IPv4 段
-│   ├── ipv6.txt        # [可选] IPv6 段
-│   └── embed.go        # Go Embed 声明文件
+├── assets/                   # 静态资源 (Embed 目标目录)
+│   ├── cfst                  # [必需] CloudflareSpeedTest 二进制
+│   ├── ip.txt                # [必需] IPv4 段
+│   ├── ipv6.txt              # [可选] IPv6 段
+│   └── embed.go              # Go Embed 声明文件
+│   └── config-example.yaml   # 构建时使用，生成config.yml保证首次启动成功
 ├── cmd/
 │   └── app/
 │       └── main.go     # 程序入口
 ├── configs/            # 配置文件目录
-│   └── config.yaml
+│   └── config-example.yaml
 ├── internal/           # 核心业务逻辑
 │   ├── config/         # 配置加载
 │   ├── dns/            # 腾讯云 SDK 封装
