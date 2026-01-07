@@ -21,13 +21,26 @@ func main() {
 
 	log.Println("Starting Cloudflare DNS Updater...")
 
+	// [关键新增] 0. 优先初始化配置文件 (自我修复)
+	// 如果 configs/config.yml 不存在（例如用户挂载了空目录），则从嵌入的 config-example.yml 生成它
+	// 这必须在 config.Load 之前执行，否则程序会因为找不到配置而崩溃
+	defaultConfigPath := "configs/config.yml"
+	if err := initAssetFile(defaultConfigPath, assets.DefaultConfig); err != nil {
+		// 如果无法写入默认配置，仅打印警告，尝试继续运行（也许文件已存在但权限不足）
+		log.Printf("Warning: Failed to init default config file: %v", err)
+	} else {
+		// 如果成功写入了文件，提示用户
+		// 这里有个小技巧：如果是首次生成，可能需要提醒用户去修改配置
+		// 但为了自动化，我们继续往下运行
+	}
+
 	// 2. 加载配置
 	cfg, err := config.Load("configs")
 	if err != nil {
 		log.Fatalf("Fatal: Failed to load configuration: %v", err)
 	}
 
-	// [新增] 自动释放默认 IP 库文件
+	// [新增] 1. 自动释放默认 IP 库文件
 	// 解决 Docker 挂载空目录导致文件丢失的问题，实现“自我初始化”
 	if err := initAssetFile(cfg.SpeedTest.IPFile, assets.IPList); err != nil {
 		log.Printf("Warning: Failed to init default IPv4 list: %v", err)
@@ -82,7 +95,7 @@ func main() {
 	log.Println("All tasks completed.")
 }
 
-// [新增] initAssetFile 检查文件是否存在，不存在则从嵌入资源中写入
+// initAssetFile 检查文件是否存在，不存在则从嵌入资源中写入
 func initAssetFile(targetPath string, data []byte) error {
 	// 如果没有嵌入数据，直接跳过
 	if len(data) == 0 {

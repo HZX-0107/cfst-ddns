@@ -84,6 +84,7 @@ speedtest:
 
 本项目支持多种 Docker 部署方式。推荐使用 GitHub 镜像站 (GHCR) 直接拉取。
 
+注意使用docker部署方式，首次启动会自动生成一个config.yml文件保证启动成功，请修改此文件为自己的配置后重新启动
 ### 方式一：Docker Compose (推荐)
 
 ```yml
@@ -146,16 +147,17 @@ docker run -d \
 
 ```
 cfst-ddns/
-├── assets/             # 静态资源 (Embed 目标目录)
-│   ├── cfst            # [必需] CloudflareSpeedTest 二进制
-│   ├── ip.txt          # [必需] IPv4 段
-│   ├── ipv6.txt        # [可选] IPv6 段
-│   └── embed.go        # Go Embed 声明文件
+├── assets/                   # 静态资源 (Embed 目标目录)
+│   ├── cfst                  # [必需] CloudflareSpeedTest 二进制
+│   ├── ip.txt                # [必需] IPv4 段
+│   ├── ipv6.txt              # [可选] IPv6 段
+│   └── embed.go              # Go Embed 声明文件
+│   └── config-example.yaml   # 构建时使用，生成config.yml保证首次启动成功
 ├── cmd/
 │   └── app/
 │       └── main.go     # 程序入口
 ├── configs/            # 配置文件目录
-│   └── config.yaml
+│   └── config-example.yaml
 ├── internal/           # 核心业务逻辑
 │   ├── config/         # 配置加载
 │   ├── dns/            # 腾讯云 SDK 封装
