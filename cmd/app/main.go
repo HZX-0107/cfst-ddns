@@ -1,13 +1,14 @@
 package main
 
 import (
-	"cfst-ddns/assets"
 	"fmt"
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"runtime"
 
+	"cfst-ddns/assets" // 引入 assets 包以访问嵌入的二进制数据
 	"cfst-ddns/internal/config"
 	"cfst-ddns/internal/dns"
 	"cfst-ddns/internal/speedtest"
@@ -25,8 +26,19 @@ func main() {
 	if err != nil {
 		log.Fatalf("Fatal: Failed to load configuration: %v", err)
 	}
-	// [新增] 检查并释放嵌入的二进制文件
-	// 如果嵌入文件有内容，我们优先使用它
+
+	// [新增] 自动释放默认 IP 库文件
+	// 解决 Docker 挂载空目录导致文件丢失的问题，实现“自我初始化”
+	if err := initAssetFile(cfg.SpeedTest.IPFile, assets.IPList); err != nil {
+		log.Printf("Warning: Failed to init default IPv4 list: %v", err)
+	}
+	if cfg.SpeedTest.IPv6File != "" {
+		if err := initAssetFile(cfg.SpeedTest.IPv6File, assets.IPv6List); err != nil {
+			log.Printf("Warning: Failed to init default IPv6 list: %v", err)
+		}
+	}
+
+	// 检查并释放嵌入的 cfst 二进制文件
 	if len(assets.CFSTBinary) > 0 {
 		log.Println("Detected embedded cfst binary, extracting...")
 		tempBinPath, err := extractBinary(assets.CFSTBinary)
@@ -61,7 +73,6 @@ func main() {
 	processIP(cfg, stRunner, dnsClient, false)
 
 	// --- 处理 IPv6 ---
-	// 只有当配置了 IPv6 文件路径时才尝试运行
 	if cfg.SpeedTest.IPv6File != "" {
 		log.Println("------------------------------------------------")
 		processIP(cfg, stRunner, dnsClient, true)
@@ -71,7 +82,34 @@ func main() {
 	log.Println("All tasks completed.")
 }
 
-// [新增] extractBinary 将内存中的二进制数据写入临时文件
+// [新增] initAssetFile 检查文件是否存在，不存在则从嵌入资源中写入
+func initAssetFile(targetPath string, data []byte) error {
+	// 如果没有嵌入数据，直接跳过
+	if len(data) == 0 {
+		return nil
+	}
+
+	// 检查文件是否存在
+	if _, err := os.Stat(targetPath); err == nil {
+		// 文件存在，不做任何操作（保留用户修改过的内容）
+		return nil
+	}
+
+	// 确保目录存在
+	dir := filepath.Dir(targetPath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("create dir: %w", err)
+	}
+
+	// 写入文件
+	log.Printf("Initializing missing asset file: %s", targetPath)
+	if err := os.WriteFile(targetPath, data, 0644); err != nil {
+		return fmt.Errorf("write asset: %w", err)
+	}
+	return nil
+}
+
+// extractBinary 将内存中的二进制数据写入临时文件
 func extractBinary(data []byte) (string, error) {
 	// 确定文件名（Windows下需要.exe后缀）
 	binName := "cfst_runner"
@@ -100,7 +138,6 @@ func extractBinary(data []byte) (string, error) {
 }
 
 // processIP 封装测速和更新逻辑
-// isIPv6: true 表示处理 IPv6, false 表示处理 IPv4
 func processIP(cfg *config.Config, runner *speedtest.Runner, client *dns.TencentClient, isIPv6 bool) {
 	ipVersion := "IPv4"
 	recordType := "A"
@@ -135,7 +172,6 @@ func processIP(cfg *config.Config, runner *speedtest.Runner, client *dns.Tencent
 	log.Printf("[%s] Process finished successfully.", ipVersion)
 }
 
-// setupLogger 配置日志同时输出到文件和控制台
 func setupLogger() {
 	logFile, err := os.OpenFile("app.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
@@ -147,7 +183,6 @@ func setupLogger() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 }
 
-// printDebugInfo 打印部分配置信息用于调试
 func printDebugInfo(cfg *config.Config) {
 	log.Printf("\n[Debug Configuration]\n")
 	log.Printf("Target Domain: %s.%s\n", cfg.Domain.SubDomain, cfg.Domain.MainDomain)

@@ -91,6 +91,9 @@ services:
   cfst-ddns:
     image: ghcr.io/hzx-0107/cfst-ddns:latest
     container_name: cfst-ddns
+    # 设置时区
+    environment:
+      TZ: Asia/Shanghai
     volumes:
       - ./configs:/app/configs
       - ./assets:/app/assets
@@ -129,7 +132,7 @@ docker build --build-arg CFST_VERSION=v2.3.4 -t cfst-ddns .
 
 建议挂载配置目录和资源目录，以便持久化数据和修改配置。
 
-```
+```shell
 docker run -d \
   --name cfst-ddns \
   -v $(pwd)/configs:/app/configs \
