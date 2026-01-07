@@ -78,6 +78,13 @@ speedtest:
   # 测速参数
   max_ping: 9999    # 最大延迟 (毫秒)
   test_count: 500   # 测速数量
+  
+  # [新增] 自定义下载测速地址
+  # 默认地址 speed.cloudflare.com 在某些地区可能无法访问
+  # 备选地址 1: https://img.131213.xyz/Test/100m.jpg
+  # 备选地址 2: https://cdn.cloudflare.steamstatic.com/steam/apps/5952/movie_max.webm
+  # 备选地址 3: https://speed.cloudflare.com/__down?bytes=20000000 (默认)
+  download_url: "https://cdn.cloudflare.steamstatic.com/steam/apps/5952/movie_max.webm"
 ```
 
 ## 🐳 Docker 部署
