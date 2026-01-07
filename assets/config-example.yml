@@ -23,7 +23,8 @@ speedtest:
   ipv6_file: "./assets/ipv6.txt"
 
   # 测速结果输出路径
-  output_csv: "./assets/result.csv"
+  output_csv_v4: "./assets/result4.csv"
+  output_csv_v6: "./assets/result6.csv"
 
   # 测速参数: 最大延迟 (毫秒) 和 测速数量
   max_ping: 9999
