@@ -79,16 +79,33 @@ func main() {
 	log.Println("------------------------------------------------")
 
 	// --- 处理 IPv4 ---
-	processIP(cfg, stRunner, dnsClient, false)
+	ipv4Result := processIP(cfg, stRunner, dnsClient, false)
 
 	// --- 处理 IPv6 ---
+	ipv6Result := ""
 	if cfg.SpeedTest.IPv6File != "" {
 		log.Println("------------------------------------------------")
-		processIP(cfg, stRunner, dnsClient, true)
+		ipv6Result = processIP(cfg, stRunner, dnsClient, true)
 	}
 
 	log.Println("------------------------------------------------")
 	log.Println("All tasks completed.")
+
+	// [新增] 任务结束时打印汇总结果
+	log.Println("Summary:")
+	if ipv4Result != "" {
+		log.Printf("  [IPv4] Updated to: %s", ipv4Result)
+	} else {
+		log.Printf("  [IPv4] No update performed (failed or no better IP)")
+	}
+
+	if cfg.SpeedTest.IPv6File != "" {
+		if ipv6Result != "" {
+			log.Printf("  [IPv6] Updated to: %s", ipv6Result)
+		} else {
+			log.Printf("  [IPv6] No update performed (failed or no better IP)")
+		}
+	}
 }
 
 // initAssetFile 检查文件是否存在，不存在则从嵌入资源中写入
@@ -147,7 +164,8 @@ func extractBinary(data []byte) (string, error) {
 }
 
 // processIP 封装测速和更新逻辑
-func processIP(cfg *config.Config, runner *speedtest.Runner, client *dns.TencentClient, isIPv6 bool) {
+// 返回更新成功的 IP 地址，失败或跳过返回空字符串
+func processIP(cfg *config.Config, runner *speedtest.Runner, client *dns.TencentClient, isIPv6 bool) string {
 	ipVersion := "IPv4"
 	recordType := "A"
 	if isIPv6 {
@@ -161,12 +179,12 @@ func processIP(cfg *config.Config, runner *speedtest.Runner, client *dns.Tencent
 	bestIP, err := runner.Run(isIPv6)
 	if err != nil {
 		log.Printf("[%s] SpeedTest failed or skipped: %v", ipVersion, err)
-		return
+		return ""
 	}
 
 	if bestIP == "" {
 		log.Printf("[%s] No valid IP found, skipping update.", ipVersion)
-		return
+		return ""
 	}
 
 	log.Printf("[%s] Best IP found: %s", ipVersion, bestIP)
@@ -175,10 +193,11 @@ func processIP(cfg *config.Config, runner *speedtest.Runner, client *dns.Tencent
 	err = client.UpdateRecord(cfg.Domain.MainDomain, cfg.Domain.SubDomain, recordType, bestIP)
 	if err != nil {
 		log.Printf("[%s] DNS update failed: %v", ipVersion, err)
-		return
+		return ""
 	}
 
 	log.Printf("[%s] Process finished successfully.", ipVersion)
+	return bestIP
 }
 
 func setupLogger() {
