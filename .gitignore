@@ -22,7 +22,7 @@ vendor/
 go.work
 .idea/
 .vscode/
-configs/config.yaml
+configs/config.yml
 assets/*.exe
 assets/cfst
 assets/*.csv

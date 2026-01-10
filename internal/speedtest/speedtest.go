@@ -139,12 +139,16 @@ func (r *Runner) parseBestIP(filePath string) (string, error) {
 		speedStr := strings.TrimSpace(row[5])
 
 		speed, _ := strconv.ParseFloat(speedStr, 64)
+		latency := strings.TrimSpace(row[4])
 
 		if speed > 0 {
 			if i > 1 {
-				latency := strings.TrimSpace(row[4])
 				log.Printf("Smart Select: Skipped %d IP(s) with 0.00 speed. Selected: %s (Speed: %s MB/s, Latency: %s ms)",
 					i-1, ip, speedStr, latency)
+			} else {
+				// [新增] 第一条就命中时的日志
+				log.Printf("Smart Select: First candidate valid. Selected: %s (Speed: %s MB/s, Latency: %s ms)",
+					ip, speedStr, latency)
 			}
 			return ip, nil
 		}
